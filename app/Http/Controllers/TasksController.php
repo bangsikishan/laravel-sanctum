@@ -3,9 +3,16 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use App\Models\Task;
+use App\Http\Resources\TaskResource;
+use Illuminate\Support\Facades\Auth;
+use App\Http\Requests\StoreTaskRequest;
+use App\Traits\HttpResponses;
 
 class TasksController extends Controller
 {
+    use HttpResponses;
+
     /**
      * Display a listing of the resource.
      *
@@ -13,17 +20,9 @@ class TasksController extends Controller
      */
     public function index()
     {
-        return response()->json('Test');
-    }
-
-    /**
-     * Show the form for creating a new resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function create()
-    {
-        //
+        return TaskResource::collection(
+            Task::where('user_id', Auth::user()->id)->get()
+        );
     }
 
     /**
@@ -32,9 +31,18 @@ class TasksController extends Controller
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
-    public function store(Request $request)
+    public function store(StoreTaskRequest $request)
     {
-        //
+        $request->validated($request->all());
+
+        $task = Task::create([
+            'user_id' => Auth::user()->id,
+            'name' => $request->name,
+            'description' => $request->description,
+            'priority' => $request->priority    
+        ]);
+
+        return new TaskResource($task);
     }
 
     /**
@@ -43,20 +51,9 @@ class TasksController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function show($id)
+    public function show(Task $task)
     {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
-    public function edit($id)
-    {
-        //
+        return $this->isNotAuthorized($task) ? $this->isNotAuthorized($task) : new TaskResource($task);
     }
 
     /**
@@ -66,9 +63,16 @@ class TasksController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, Task $task)
     {
-        //
+        if (Auth::user()->id !== $task->user_id)
+        {
+            return $this->error('', 'You are not authorized to make this request!', 403);
+        }
+        
+        $task->update($request->all());
+
+        return new TaskResource($task);
     }
 
     /**
@@ -77,8 +81,16 @@ class TasksController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function destroy($id)
+    public function destroy(Task $task)
     {
-        //
+        return $this->isNotAuthorized($task) ? $this->isNotAuthorized($task) : $task->delete();
+    }
+
+    private function isNotAuthorized($task)
+    {
+        if (Auth::user()->id !== $task->user_id)
+        {
+            return $this->error('', 'You are not authorized to make this request!', 403);
+        }
     }
 }
